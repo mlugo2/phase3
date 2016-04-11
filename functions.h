@@ -20,8 +20,8 @@ typedef struct {
   Optab opcode [31] =
 { {"ADD\0", 24}, {"AND\0", 88},{"BYTE\0", 252}, {"COMP\0", 40}, {"DIV\0", 36}, {"END\0", 251}, {"J\0", 60},
   {"JEQ\0", 48}, {"JGT\0", 52}, {"JLT\0", 56}, {"JSUB\0", 72}, {"LDA\0", 0},
-  {"LDCH\0", 80}, {"LDL\0", 8}, {"LDX\0", 4}, {"MUL\0", 32}, {"OR\0", 68}, {"RESB\0", 254},{"RESW\0", 255},
-  {"RD\0", 216}, {"RSUB\0", 76}, {"STA\0", 12},{"START\0", 250}, {"STCH\0", 84}, {"STL\0", 20},
+  {"LDCH\0", 80}, {"LDL\0", 8}, {"LDX\0", 4}, {"MUL\0", 32}, {"OR\0", 68},{"RD\0", 216}, {"RESB\0", 254},{"RESW\0", 255},
+  {"RSUB\0", 76}, {"STA\0", 12},{"START\0", 250}, {"STCH\0", 84}, {"STL\0", 20},
   {"STX\0", 16}, {"SUB\0", 28}, {"TD\0", 224}, {"TIX\0", 44}, {"WD\0", 220},{"WORD\0", 253} };
 
 
@@ -37,7 +37,7 @@ void assemble(char []);
 
 /* Directive dependencies */
 void parameterFix(char [], char [], char []);
-_Bool symtabSearch(char [], Symtab []);
+_Bool symtabSearch(char [], Symtab [], int, int, int*);
 _Bool optabSearch(char [], int *, int );
 int errorChecker(char [], char [], char [], int);
 _Bool byteOperandCheck(char [], int *);
@@ -369,8 +369,9 @@ void assemble(char fileName [])
 	FILE *in, *out;
     int locctr;
     int error = 0;
-    int index, opIndex;
+    int index, opIndex, sybIndex;
 	int intOperand = 0;	// Used when the operand is a number
+	int programLength = 0;
 	
 	Symtab symbolTable[500] = {0};
 	Symtab specialTable[5] = {0};
@@ -453,7 +454,7 @@ void assemble(char fileName [])
                                 if ( label[0] != '\0')
                                 {
                                         // Search SYMTAB for lable
-                                        if(symtabSearch(label, symbolTable))
+                                        if(symtabSearch(label, symbolTable, 0, index, &sybIndex))
                                                 // set error flag for duplicate label
                                                 error = error | 1;
                                         else
@@ -471,19 +472,69 @@ void assemble(char fileName [])
                                 // Search for OPCODE in OPTAB
                                 if(optabSearch(instruction, &opIndex, 1))
                                 {
-									// Error checking blank operand (4)
-									if ( strcmp(instruction, "RSUB") == 0 )
-									{	
-										if ( operand[0] != '\0')
-											error = error | 4;
+									//printf("Within the if: %s %X\n", opcode[opIndex].name,opcode[opIndex].code);
+									
+									if ( strcmp(instruction, "WORD") == 0){
+										
+										// Error checking blank operand
+										if ( operand[0] == '\0' || !hexCheck(operand))
+											error = error | 8;
+									
+										fprintf(out, "%x\n", locctr);
+										locctr += 3;
 									}
-									else if (operand[0] == '\0')
-											error = error | 4;
+									else if ( strcmp(instruction, "RESW") == 0) {
+										
+										// Error checking blank operand
+										if ( operand[0] == '\0'|| !hexCheck(operand))
+											error = error | 8;
+										
+										fprintf(out, "%x\n", locctr);
+										sscanf(operand, "%d", &intOperand);
+										locctr += 3*intOperand;
+										
+									}
+									
+									else if ( strcmp(instruction, "RESB") == 0) {
+										
+										// Error checking blank operand
+										if ( operand[0] == '\0'|| !hexCheck(operand))
+											error = error | 8;
+										
+										fprintf(out, "%x\n", locctr);
+										sscanf(operand, "%d", &intOperand);
+										locctr += intOperand;
+										
+									}
+									
+									else if ( strcmp(instruction, "BYTE") == 0) {
+										
+										// Check operand for BYTE directive
+										if ( byteOperandCheck(operand, &locctr))
+										{
+												error = error | 8;
+										}
+											
+										fprintf(out, "%x\n", locctr);
+									}
+									else {
+											// Error checking blank operand (4)
+											if ( strcmp(instruction, "RSUB") == 0 )
+											{	
+												if ( operand[0] != '\0')
+													error = error | 4;
+											}
+											else if (operand[0] == '\0')
+												error = error | 4;
 
-									fprintf(out, "%x\n", locctr);
-									locctr += 3;
+											fprintf(out, "%x\n", locctr);
+											locctr += 3;
+																	
+									}
+									
+									
 								}
-								else if( strcmp(instruction, "WORD") == 0)
+								/*else if( strcmp(instruction, "WORD") == 0)
 								{
 									// Error checking blank operand
 									if ( operand[0] == '\0' || !hexCheck(operand))
@@ -522,7 +573,7 @@ void assemble(char fileName [])
 											
 										fprintf(out, "%x\n", locctr);
 											
-									}
+									}*/
 								else
 								{
 									// Set error flag for missing instruction (256)
@@ -536,8 +587,11 @@ void assemble(char fileName [])
 								// Check for remaining errors
 								error = errorChecker(label, instruction, operand, error);  
 									
+								
+								//printf("%s	%X\n", opcode[opIndex].name, opcode[opIndex].code);
+									
 								// Write to file
-								fprintf(out, "%x\n", opcode[opIndex].code);
+								fprintf(out, "%X\n", opcode[opIndex].code);
 								fprintf(out, "%s\n", operand);
 								fprintf(out, "%d\n", error);
 				
@@ -560,7 +614,7 @@ void assemble(char fileName [])
 	        
 	        if ( strcmp(instruction, "END") == 0)
             {
-				int programLength = locctr + 3 - specialTable[0].address;
+				programLength = locctr - specialTable[0].address;
 	        
 				error = 0;
 	        
@@ -570,7 +624,7 @@ void assemble(char fileName [])
 				// Retrieve the opcode
 				optabSearch(instruction, &opIndex, 3);
 			
-				if(!symtabSearch(label, symbolTable))
+				if(!symtabSearch(label, symbolTable, 0, index, &sybIndex))
 					error = error | 32;
 				
 				if ( programLength > 32000)
@@ -579,28 +633,54 @@ void assemble(char fileName [])
 				error = errorChecker(label, instruction, operand, error);
 			
 				// Write lines to intermediate file
-				fprintf(out, "%x\n", locctr);
-				fprintf(out, "%x\n", opcode[opIndex].code);
+				fprintf(out, "%X\n", locctr);
+				fprintf(out, "%X\n", opcode[opIndex].code);
 				fprintf(out, "%s\n", operand);
 				fprintf(out, "%d\n", error);	
 			}
 	        
         }// end Pass 1
 	
+	int k; 
+	for ( k = 0; k < index; k++)
+		printf("%s		%X\n", symbolTable[k].name, symbolTable[k].address);
+	
+	
 	fclose(in);
 	fclose(out);
 	
+	
 	//--------------------------------------------------------------------------------
 	
-	void readIntermediateLine(char statement[], char strAddress[], char strOpcode[], char operand[], char strError[],int *,int *,int *, FILE *in );
+	void readIntermediateLine(Symtab [], char [], char [], char [], char [], int *, int , FILE *);
+	_Bool errorInterpreter( int, char [] );
+	
+	_Bool errorFlag = 0;
 	
 	// String varibles for input from intermediate file
 	char statement[256], strAddress[7], strError[16], strOpcode[4];
+	char errorMessage[500];
 	
+	char temp[10];
+	
+	//
+	char textRecord1[50];
+	char textRecord2[256];
+	char objCodeLength[5];
+	
+	// Initialize strings
+	temp[0] = '\0';
+	textRecord1[0] = '\0';
+	textRecord2[0] = '\0';
+	objCodeLength[0] = '\0';
+	errorMessage[0] = '\0';
 	statement[0] = '\0';
 	
 	// Integer varibles for conversion from string
-	int intAddress, intError, intOpcode;
+	int intAddress, intError, intOpcode, symAddress;
+	
+	int symIndex;
+	int objectCodeLength = 0;
 	
 	clear(label, 50);
     clear(instruction, 50);
@@ -620,9 +700,7 @@ void assemble(char fileName [])
 	}
 	else
 	{
-		/************************************************
-        *                   PASS 2                      *
-		************************************************/
+		
 		
 		// Read first line from intermediate file
 		fgets(line, sizeof(line), in);
@@ -639,50 +717,203 @@ void assemble(char fileName [])
         // If opcode is start
         if (opcode[opIndex].code == 250)
 		{
-			puts("it is start\n");
 			// Check for error
 			fgets(line, sizeof(line), in);
+			sscanf(line, "%d", &error);
+			errorFlag = errorInterpreter(error, errorMessage);			
 			
 			// Read next line
-			readIntermediateLine( statement, strAddress, strOpcode, operand, strError, &intAddress, &intError, &intOpcode,in );
+			readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
 			
-			printf("statement: %s", statement);
-			printf("address: %d\n", intAddress);
-			printf("opcode: %d\n", intOpcode);
-			printf("operand: %s", operand);
-			printf("error: %d\n", intError);
+			// Check for error
+			errorFlag = errorInterpreter(error, errorMessage);	
 			
-		}
+		} // end if opcode start
+		
+		// Write header record to oject program
+		fprintf(out, "H%s%X\n", specialTable[0].name, programLength );
+		
+		// Initialize first part of Text record string
+		textRecord1[0] = 'T';
+		strcat(textRecord1, strAddress);
+		
+		// Initialize second part of Text record string
+		strcpy(textRecord2, strOpcode);
+		strcat(textRecord2, operand);
+		
+		printf("%s\n", textRecord1);
+		printf("%s\n", textRecord2);
+		
+		while ( strcmp( strOpcode, "FB") != 0 )
+		{
+			objectCodeLength = strlen(textRecord2);
+			
+			readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
+			errorFlag = errorInterpreter(error, errorMessage);
+			
+			printf("opcode: %s\n", strOpcode);
+			
+			
+			if ( strcmp(strOpcode, "FF") == 0 || strcmp(strOpcode, "FE") == 0 )
+			puts("It is FE or FF");
+			
+			
+		
+			
+		} // end while
 		
 	}// end Pass 2
 		
 	fclose(in);
 	fclose(out);
 	
+	
 	puts("File assembled.");
 
 }
 
-void readIntermediateLine(char statement[], char strAddress[], char strOpcode[], char operand[], char strError[], int *intAddress, int *intError, int *intOpcode, FILE *in ){
+void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], char strOpcode[], char strOperand[], int *intError, int index, FILE *in ){
 	
 	char line[256];
 	line[0] = '\0';
+	int symAddress, symIndex = 0;
+	int temp;
 	
-	fgets(line, sizeof(line), in);
+	fgets(line, sizeof(line), in);		// Get source statement
 	strcpy(statement, line);
-	fgets(line, sizeof(line), in);
-	strcpy(strAddress, line);
-	fgets(line, sizeof(line), in);
+	
+	fgets(line, sizeof(line), in);		// Get address location
+	sscanf(line, "%06X", &temp);
+	sprintf(strAddress, "%06X", temp);
+	//strcpy(strAddress, line);
+	
+	fgets(line, sizeof(line), in);		// Get instruction opcode
 	strcpy(strOpcode, line);
-	fgets(line, sizeof(line), in);
-	strcpy(operand, line);
-	fgets(line, sizeof(line), in);
-	strcpy(strError, line);
 	
-	sscanf(strAddress, "%d", intAddress);
-	sscanf(strOpcode, "%d", intOpcode);
-	sscanf(strError, "%d", intError);
+	fgets(line, sizeof(line), in);		// Get label
 	
+	// Find address for symbol
+	symtabSearch(line, symbol, 0, index, &symIndex);	
+	symAddress = symbol[symIndex].address;
+	
+	sprintf(strOperand, "%X", symAddress);
+	
+	fgets(line, sizeof(line), in);		// Get error
+	sscanf(line, "%d", intError);
+	
+	int len = strlen(statement);
+	if (statement[len -1] == '\n')
+		statement[len -1] = '\0';
+			
+	len = strlen(strOpcode);
+	if (strOpcode[len -1] == '\n')
+		strOpcode[len -1] ='\0';
+	
+	/*
+	printf("Source statement:	%s\n", statement);
+	printf("location address:	%s\n", strAddress);
+	printf("Instruction opcode:	%s\n", strOpcode);
+	printf("operand:	%s\n", strOperand);
+	printf("Error:	%d\n", *intError);
+	*/
+}
+
+_Bool errorInterpreter ( int numberToConvert, char errorMessage[])
+{
+	if (numberToConvert == 0)
+		return 0;
+	
+	const char baseDigits[16] = {
+	'0', '1', '2', '3', '4', '5', '6', '7',
+	'8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+	
+	char tempMessage[500];
+	tempMessage[0] = '\0';	
+	
+	char errorBitMask[16];
+	errorBitMask[0] = '\0';
+
+	int	convertedNumber[64];
+	int	nextDigit, base, index = 0;
+	
+	base = 2;
+
+	// convert to the indicated base
+
+	do{
+		convertedNumber[index] = numberToConvert % base;
+		++index;
+		numberToConvert = numberToConvert / base;
+	} 
+	while(numberToConvert != 0);
+
+	// Arrange the bits from LSB ---> MSB
+	int i;
+	for ( i = 0; i < index; i++){
+		nextDigit = convertedNumber[i];
+		
+		errorBitMask[i] = baseDigits[nextDigit];
+	
+	}
+	
+	errorBitMask[i] = '\0';
+	
+	int len = strlen(errorBitMask);
+	
+	// Check for errors and assign message
+	for (i = 0; i < len; i++)
+	{
+
+		if( i == 0 && errorBitMask[0] == '1' ){
+
+			strcat(tempMessage, "Duplicate labels. ");
+		}
+			
+		if( i == 1 && errorBitMask[1] == '1' ){
+
+			strcat(tempMessage, "Illegal label. ");
+		}
+			
+		if( i == 2 && errorBitMask[2] == '1' ){
+
+			strcat(tempMessage, "Illegal operation. ");
+		}
+			
+		if( i == 3 && errorBitMask[3] == '1' ){
+
+			strcat(tempMessage, "Missing or illegal operand on data storage directive. ");
+		}
+			
+		if( i == 4 && errorBitMask[4] == '1' ){
+
+			strcat(tempMessage, "Missing or illegal operand on START directive. ");
+		}
+			
+		if( i == 5 && errorBitMask[5] == '1' ){
+
+			strcat(tempMessage, "Missing or illegal operand on END directive. ");
+		}
+			
+		if( i == 6 && errorBitMask[6] == '1' ){
+
+			strcat(tempMessage, "Too many symbols. ");
+		}
+			
+		if( i == 7 && errorBitMask[7] == '1' ){
+
+			strcat(tempMessage, "Program is too long. ");
+		}
+			
+		if( i == 8 && errorBitMask[8] == '1' ){
+
+			strcat(tempMessage, "Missing instruction. ");
+		}
+	}
+		
+		strcat(errorMessage, "Error: ");
+		strcat(errorMessage, tempMessage);
+		
+		return 1;
 	
 }
 
@@ -715,17 +946,28 @@ void parameterFix(char p1[], char p2[], char p3[])
 
 }
 
-_Bool symtabSearch(char key[], Symtab symtab[])
+_Bool symtabSearch(char key[], Symtab symtab[], int min, int max, int * index )
 {
+	int len = strlen(key);
+	
+	if ( key[len -1 ] == '\n')
+		key[len - 1] = '\0';
+	
+	void sort(Symtab [], int, int);
+	
+	sort(symtab, min, max);
+	
+	int i;
 
-        int min = 0;
-        int max = 499;
-        
         while ( min <= max)
         {
                 
                 int mid = (min + max) /2;
-                if ( strcmp(symtab[mid].name, key) == 0) return 1;
+                //printf("$%s$	$%s$ \n", symtab[mid].name, key);
+                if ( strcmp(symtab[mid].name, key) == 0){
+					//printf("mid: %d\n", mid);
+					*index = mid; 
+					return 1;}
                 else if (strcmp(symtab[mid].name, key) < 0) min = mid + 1;
                 else max = mid -1;
                 
@@ -733,6 +975,21 @@ _Bool symtabSearch(char key[], Symtab symtab[])
 
        return 0;      
 }
+
+void sort(Symtab table[], int min, int max){
+	Symtab temp;
+	int i, j;
+	
+	for (i = 1; i < max; i++)
+      for (j = min; j < max - i; j++) {
+         if (strcmp(table[j].name, table[j + 1].name) > 0) {
+            temp = table[j];
+            table[j] = table[j + 1];
+            table[j + 1] = temp;
+         }
+      }
+}
+
 
 _Bool optabSearch(char key[], int  *n, int code)
 {
