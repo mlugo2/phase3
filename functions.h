@@ -19,7 +19,7 @@ typedef struct {
   
   Optab opcode [31] =
 { {"ADD\0", 24}, {"AND\0", 88},{"BYTE\0", 252}, {"COMP\0", 40}, {"DIV\0", 36}, {"END\0", 251}, {"J\0", 60},
-  {"JEQ\0", 48}, {"JGT\0", 52}, {"JLT\0", 56}, {"JSUB\0", 72}, {"LDA\0", 0},
+  {"JEQ\0", 48}, {"JGT\0", 52}, {"JLT\0", 56}, {"JSUB\0", 72}, {"LDA\0", 00},
   {"LDCH\0", 80}, {"LDL\0", 8}, {"LDX\0", 4}, {"MUL\0", 32}, {"OR\0", 68},{"RD\0", 216}, {"RESB\0", 254},{"RESW\0", 255},
   {"RSUB\0", 76}, {"STA\0", 12},{"START\0", 250}, {"STCH\0", 84}, {"STL\0", 20},
   {"STX\0", 16}, {"SUB\0", 28}, {"TD\0", 224}, {"TIX\0", 44}, {"WD\0", 220},{"WORD\0", 253} };
@@ -139,8 +139,11 @@ _Bool byteOperandCheck(char operand[], int *locctr)
 	{
 		if ( (lstOperand - strOperand) > 30)
 			return 1;
+	
+		//fprintf(out, "%x\n", *locctr);
 			
 		*locctr += (lstOperand - strOperand);	
+		
 		return 0;
 	}
 	else 
@@ -354,7 +357,7 @@ void welcomeMessage()
 
         system("clear");
         printf("%s\n", asciipic_txt);
-        printf("Welcome to Sim OS 2.0\n");
+        printf("Welcome to Sim OS 3.0\n");
         printf("For supported commands type: help\n\n");
 
 } 
@@ -410,7 +413,7 @@ void assemble(char fileName [])
                 {
                         // Saving program name and starting address
                         strcpy(specialTable[0].name, label);
-                        sscanf(operand, "%d", &specialTable[0].address);
+                        sscanf(operand, "%X", &specialTable[0].address);
 
                         // Initialize LOCCTR to starting address
                         sscanf(operand, "%x", &locctr);
@@ -509,25 +512,27 @@ void assemble(char fileName [])
 									
 									else if ( strcmp(instruction, "BYTE") == 0) {
 										
+										fprintf(out, "%x\n", locctr);
+										
 										// Check operand for BYTE directive
 										if ( byteOperandCheck(operand, &locctr))
 										{
 												error = error | 8;
 										}
 											
-										fprintf(out, "%x\n", locctr);
 									}
 									else {
 											// Error checking blank operand (4)
 											if ( strcmp(instruction, "RSUB") == 0 )
 											{	
+												
 												if ( operand[0] != '\0')
 													error = error | 4;
 											}
 											else if (operand[0] == '\0')
 												error = error | 4;
 
-											fprintf(out, "%x\n", locctr);
+											fprintf(out, "%X\n", locctr);
 											locctr += 3;
 																	
 									}
@@ -615,6 +620,10 @@ void assemble(char fileName [])
 	        if ( strcmp(instruction, "END") == 0)
             {
 				programLength = locctr - specialTable[0].address;
+				
+				printf("locctr: %X\n", locctr);
+				printf("str: %d\n", specialTable[0].address);
+				printf("length: %X\n", programLength);
 	        
 				error = 0;
 	        
@@ -624,7 +633,7 @@ void assemble(char fileName [])
 				// Retrieve the opcode
 				optabSearch(instruction, &opIndex, 3);
 			
-				if(!symtabSearch(label, symbolTable, 0, index, &sybIndex))
+				if(!symtabSearch(label, specialTable, 0, 5, &sybIndex))
 					error = error | 32;
 				
 				if ( programLength > 32000)
@@ -641,16 +650,21 @@ void assemble(char fileName [])
 	        
         }// end Pass 1
 	
+	
+	/*
 	int k; 
 	for ( k = 0; k < index; k++)
 		printf("%s		%X\n", symbolTable[k].name, symbolTable[k].address);
-	
+	*/
 	
 	fclose(in);
 	fclose(out);
 	
 	
 	//--------------------------------------------------------------------------------
+	
+	FILE *output;
+	char outFile[64];
 	
 	void readIntermediateLine(Symtab [], char [], char [], char [], char [], int *, int , FILE *);
 	_Bool errorInterpreter( int, char [] );
@@ -689,9 +703,11 @@ void assemble(char fileName [])
 	clear(outName, 64);
 	strcpy(fileName, "intermediate");
 	strcpy(outName, "objectfile");
+	strcpy(outFile, "listing");
 	
-	// Open input and output file
+	// Open output file
 	out = fopen (outName, "w");
+	output = fopen(outFile, "w");
 	
 	if( (in = fopen(fileName, "r")) == NULL){
 		
@@ -700,12 +716,15 @@ void assemble(char fileName [])
 	}
 	else
 	{
-		
+		/*
+		 *			pass2 
+		 */
 		
 		// Read first line from intermediate file
 		fgets(line, sizeof(line), in);
 		
-		printf("Line: %s", line);
+		// Print souce line to listing file
+		fprintf(output, "%s", line );
 		
 		// Split read line
         sscanf(line,"%s %s %s %*s", label, instruction, operand);
@@ -720,7 +739,12 @@ void assemble(char fileName [])
 			// Check for error
 			fgets(line, sizeof(line), in);
 			sscanf(line, "%d", &error);
-			errorFlag = errorInterpreter(error, errorMessage);			
+			errorFlag = errorInterpreter(error, errorMessage);
+			
+			if( errorFlag){
+				fprintf(output, "%s", errorMessage );
+			}
+						
 			
 			// Read next line
 			readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
@@ -731,7 +755,7 @@ void assemble(char fileName [])
 		} // end if opcode start
 		
 		// Write header record to oject program
-		fprintf(out, "H%s%X\n", specialTable[0].name, programLength );
+		fprintf(out, "H%s%06X%06X\n", specialTable[0].name,specialTable[0].address, programLength );
 		
 		// Initialize first part of Text record string
 		textRecord1[0] = 'T';
@@ -741,31 +765,108 @@ void assemble(char fileName [])
 		strcpy(textRecord2, strOpcode);
 		strcat(textRecord2, operand);
 		
-		printf("%s\n", textRecord1);
-		printf("%s\n", textRecord2);
-		
 		while ( strcmp( strOpcode, "FB") != 0 )
 		{
 			objectCodeLength = strlen(textRecord2);
 			
 			readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
+			
+			fprintf(output, "%-50s%s\t%s%s\n", statement, strAddress, strOpcode, operand );
+			
 			errorFlag = errorInterpreter(error, errorMessage);
 			
-			printf("opcode: %s\n", strOpcode);
+			if( errorFlag){
+				fprintf(output, "%s", errorMessage );
+			}
 			
+			// Starts a new Text Record for RESW or RESB
+			if ( strcmp(strOpcode, "FF") == 0 || strcmp(strOpcode, "FE") == 0 || (objectCodeLength + 6) > 60 ){
+				
+				// Get the length in hex
+				sprintf(temp, "%02X", objectCodeLength/2);  // convert from int to string
+				
+				// Attatch length to textrecord1
+				strcat(textRecord1, temp);
+				
+				// Attatch textrecord2 to textrecord1
+				strcat(textRecord1, textRecord2);
+				
+				// Write header record to oject program
+				fprintf(out, "%s\n", textRecord1 );
+				printf( "%s\n", textRecord1 );
+				
+				clear(temp, 10);
+				clear(textRecord1, 50);
+				clear(textRecord2, 256);
+				objectCodeLength = 0;
+				
+				
+				// Start new textrecord
+				while ( strcmp(strOpcode, "FF") == 0 || strcmp(strOpcode, "FE") == 0 )
+				{
+					readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
+					fprintf(output, "%s\t%s\t%s%s\n", statement, strAddress, strOpcode, operand );
+					errorFlag = errorInterpreter(error, errorMessage);
+					if( errorFlag){
+						fprintf(output, "%s", errorMessage );
+					}
+				}
+				
+				strcpy(textRecord1, "T");
+				strcat(textRecord1, strAddress);
+				strcpy(textRecord2, strOpcode);
+				strcat(textRecord2, operand);     
 			
-			if ( strcmp(strOpcode, "FF") == 0 || strcmp(strOpcode, "FE") == 0 )
-			puts("It is FE or FF");
+				
+			}
+			else if( strcmp(strOpcode, "FC") == 0 ) {
+				strcat(textRecord2, operand);
+			}
+			else if ( strcmp(strOpcode, "FB") == 0 ) {
+				
+				// Get the length in hex
+				sprintf(temp, "%02X", objectCodeLength/2);  // convert from int to string
+				
+				// Attatch length to textrecord1
+				strcat(textRecord1, temp);
+				
+				// Attatch textrecord2 to textrecord1
+				strcat(textRecord1, textRecord2);
+				
+				// Write header record to oject program
+				fprintf(out, "%s\n", textRecord1 );
+				printf( "%s\n", textRecord1 );
+				
+				clear(temp, 10);
+				clear(textRecord1, 50);
+				clear(textRecord2, 256);
+				objectCodeLength = 0;
+				
+				strcpy(textRecord1, "E");
+				strcat(textRecord1, strOpcode);
+				strcat(textRecord1, operand);
+				fprintf(out, "%s\n", textRecord1 ); 
+				printf( "%s\n", textRecord1 );
+				
+			}
+			else {
+				
 			
-			
+				strcat(textRecord2, strOpcode);
+				strcat(textRecord2, operand);
+				
+			}
 		
 			
 		} // end while
+		
 		
 	}// end Pass 2
 		
 	fclose(in);
 	fclose(out);
+	
+	fclose(output);
 	
 	
 	puts("File assembled.");
@@ -775,7 +876,11 @@ void assemble(char fileName [])
 void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], char strOpcode[], char strOperand[], int *intError, int index, FILE *in ){
 	
 	char line[256];
+	char strTemp[50];
+	
 	line[0] = '\0';
+	strTemp[0] = '\0';
+	
 	int symAddress, symIndex = 0;
 	int temp;
 	
@@ -785,23 +890,128 @@ void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], 
 	fgets(line, sizeof(line), in);		// Get address location
 	sscanf(line, "%06X", &temp);
 	sprintf(strAddress, "%06X", temp);
-	//strcpy(strAddress, line);
+
 	
 	fgets(line, sizeof(line), in);		// Get instruction opcode
-	strcpy(strOpcode, line);
+	sscanf(line, "%02X", &temp);
+	sprintf(strOpcode, "%02X", temp);
 	
-	fgets(line, sizeof(line), in);		// Get label
+	fgets(line, sizeof(line), in);		// Get operand
+	int len = strlen(line);	
 	
-	// Find address for symbol
-	symtabSearch(line, symbol, 0, index, &symIndex);	
-	symAddress = symbol[symIndex].address;
+	line[len - 1] = '\0';
 	
-	sprintf(strOperand, "%X", symAddress);
+	
+	//printf("line is: #%s#\n", line);
+	
+	
+	// instruction is WORD
+	if ( strcmp( strOpcode, "FD") == 0 ){
+		
+		strcpy(strOpcode, "00");
+		
+		sscanf(line, "%04X", &temp);
+		sprintf(strOperand, "%04d", temp);
+		
+	}
+	// instruction is BYTE
+	else if ( strcmp( strOpcode, "FC") == 0 ){
+		
+		strcpy(strOperand, line);
+		
+		if ( strOperand[0] == 'C' ){
+			
+			len = strlen(strOperand);
+			
+			int i;
+			int j = 0;
+			
+			for ( i = 0; i < len; i++){
+				
+				if ( strOperand[i] != 'C' && strOperand[i] != '\''){
+					//printf("str: %c\n", strOperand[i]);
+					strTemp[j] = strOperand[i];
+					j++;	
+				}
+			}	
+				
+			strTemp[j] = '\0';
+			
+			len = strlen(strTemp);
+			
+			/*printf("strTemp[0]: %02X\n", strTemp[0]);
+			printf("strTemp[1]: %02X\n", strTemp[1]);
+			printf("strTemp[2]: %02X\n", strTemp[2]);
+			*/
+			for (i = 0; i < len; i++){
+				
+				if ( i == 0 ){
+					temp = (int)strTemp[i];
+					sprintf(strOperand, "%02X", temp);
+				}
+				else {
+					temp = (int)strTemp[i];
+					//printf("temp: %X\n", temp);
+					sprintf(line, "%02X", temp);
+					strcat(strOperand, line);
+				}
+			}
+			
+			
+			//printf("%s\n", strOperand);		
+			
+			//puts("Press enter");
+			//int c = getchar();
+			
+		}
+		else {
+			
+			len = strlen(strOperand);
+			
+			int i;
+			int j = 0;
+			
+			for ( i = 0; i < len; i++){
+				
+				if ( strOperand[i] != 'X' && strOperand[i] != '\''){
+					//printf("str: %c\n", strOperand[i]);
+					strTemp[j] = strOperand[i];
+					j++;	
+				}
+			}	
+				
+			strTemp[j] = '\0';
+			strcpy(strOperand, strTemp);
+		}
+				
+	}
+	else if ( line[len - 2] == 'X' && line[len - 3] == ','){
+		
+		line[len-2] = line[len -3] = '\0';
+		
+		symtabSearch(line, symbol, 0, index, &symIndex);
+		
+		temp = symbol[index].address;
+		temp += 32768;
+
+		sprintf(strOperand, "%04X", temp);
+		
+	}
+	else if ( line[0] == '\0' ){
+		strcpy(strOperand, "0000");
+	}
+	else {
+		
+		// Find address for symbol
+		symtabSearch(line, symbol, 0, index, &symIndex);	
+		symAddress = symbol[symIndex].address;
+		sprintf(strOperand, "%X", symAddress);		
+	}
 	
 	fgets(line, sizeof(line), in);		// Get error
 	sscanf(line, "%d", intError);
 	
-	int len = strlen(statement);
+	len = strlen(statement);
 	if (statement[len -1] == '\n')
 		statement[len -1] = '\0';
 			
@@ -815,7 +1025,9 @@ void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], 
 	printf("Instruction opcode:	%s\n", strOpcode);
 	printf("operand:	%s\n", strOperand);
 	printf("Error:	%d\n", *intError);
-	*/
+	
+	puts("Press enter to continue..");
+	int c = getchar();*/
 }
 
 _Bool errorInterpreter ( int numberToConvert, char errorMessage[])
@@ -1047,10 +1259,12 @@ int errorChecker(char label[], char instruction[], char operand[], int error)
 		if ( !hexCheck(operand))
 			error = error | 16;
 			
+		printf("%d\n", error);
 		return error;	
 	}
 	else if ( strcmp ( instruction, "END") == 0 )
 	{
+		
 		if ( isdigit(operand[0]) || operand[0] == '\0')
 			error = error | 32;
 
