@@ -377,7 +377,7 @@ void assemble(char fileName [])
 	int programLength = 0;
 	
 	Symtab symbolTable[500] = {0};
-	Symtab specialTable[5] = {0};
+	Symtab specialTable[1] = {0};
 	
 	// Variables for split
     char label[50], instruction[50], operand[50];
@@ -633,7 +633,7 @@ void assemble(char fileName [])
 				// Retrieve the opcode
 				optabSearch(instruction, &opIndex, 3);
 			
-				if(!symtabSearch(label, specialTable, 0, 5, &sybIndex))
+				if(!symtabSearch(operand, symbolTable, 0, index, &sybIndex))
 					error = error | 32;
 				
 				if ( programLength > 32000)
@@ -757,6 +757,8 @@ void assemble(char fileName [])
 		// Write header record to oject program
 		fprintf(out, "H%s%06X%06X\n", specialTable[0].name,specialTable[0].address, programLength );
 		
+		printf("name: %s\n", specialTable[0].name);
+		
 		// Initialize first part of Text record string
 		textRecord1[0] = 'T';
 		strcat(textRecord1, strAddress);
@@ -771,12 +773,15 @@ void assemble(char fileName [])
 			
 			readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
 			
-			fprintf(output, "%-50s%s\t%s%s\n", statement, strAddress, strOpcode, operand );
+			if ( strcmp(strOpcode, "FB") == 0 )
+				fprintf(output, "%-75s\n", statement );
+			else
+			fprintf(output, "%-75s%s\t%s%s\n", statement, strAddress, strOpcode, operand );
 			
 			errorFlag = errorInterpreter(error, errorMessage);
 			
 			if( errorFlag){
-				fprintf(output, "%s", errorMessage );
+				fprintf(output, "%s\n", errorMessage );
 			}
 			
 			// Starts a new Text Record for RESW or RESB
@@ -805,10 +810,10 @@ void assemble(char fileName [])
 				while ( strcmp(strOpcode, "FF") == 0 || strcmp(strOpcode, "FE") == 0 )
 				{
 					readIntermediateLine( symbolTable, statement, strAddress, strOpcode, operand, &error, index, in );
-					fprintf(output, "%s\t%s\t%s%s\n", statement, strAddress, strOpcode, operand );
+					fprintf(output, "%-75s%s\t%s%s\n", statement, strAddress, strOpcode, operand );
 					errorFlag = errorInterpreter(error, errorMessage);
 					if( errorFlag){
-						fprintf(output, "%s", errorMessage );
+						fprintf(output, "%s\n", errorMessage );
 					}
 				}
 				
@@ -862,6 +867,11 @@ void assemble(char fileName [])
 		
 		
 	}// end Pass 2
+	
+	
+	int k; 
+	for ( k = 0; k < index; k++)
+		fprintf(output,"%s		%X\n", symbolTable[k].name, symbolTable[k].address);
 		
 	fclose(in);
 	fclose(out);
@@ -883,6 +893,7 @@ void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], 
 	
 	int symAddress, symIndex = 0;
 	int temp;
+	int errorTemp = 0;
 	
 	fgets(line, sizeof(line), in);		// Get source statement
 	strcpy(statement, line);
@@ -916,6 +927,8 @@ void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], 
 	}
 	// instruction is BYTE
 	else if ( strcmp( strOpcode, "FC") == 0 ){
+		
+		clear(strOpcode, 50);
 		
 		strcpy(strOperand, line);
 		
@@ -1000,16 +1013,32 @@ void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], 
 	else if ( line[0] == '\0' ){
 		strcpy(strOperand, "0000");
 	}
+	else if (strcmp(strOpcode, "FF") == 0 || strcmp(strOpcode, "FE") == 0 ){
+		
+		strcpy(strOperand, "0000");
+		clear(strOperand, 50);
+		clear(strOpcode, 50);		
+	}
 	else {
 		
 		// Find address for symbol
-		symtabSearch(line, symbol, 0, index, &symIndex);	
-		symAddress = symbol[symIndex].address;
-		sprintf(strOperand, "%X", symAddress);		
+		if (symtabSearch(line, symbol, 0, index, &symIndex) ){
+			symAddress = symbol[symIndex].address;
+			sprintf(strOperand, "%X", symAddress);		
+		}	
+		else {
+			
+			strcpy(strOperand, "0000");
+			errorTemp = 4;
+		}
+			
 	}
+	
 	
 	fgets(line, sizeof(line), in);		// Get error
 	sscanf(line, "%d", intError);
+	
+	*intError = *intError | errorTemp;
 	
 	len = strlen(statement);
 	if (statement[len -1] == '\n')
@@ -1019,15 +1048,6 @@ void readIntermediateLine(Symtab symbol[], char statement[], char strAddress[], 
 	if (strOpcode[len -1] == '\n')
 		strOpcode[len -1] ='\0';
 	
-	/*
-	printf("Source statement:	%s\n", statement);
-	printf("location address:	%s\n", strAddress);
-	printf("Instruction opcode:	%s\n", strOpcode);
-	printf("operand:	%s\n", strOperand);
-	printf("Error:	%d\n", *intError);
-	
-	puts("Press enter to continue..");
-	int c = getchar();*/
 }
 
 _Bool errorInterpreter ( int numberToConvert, char errorMessage[])
