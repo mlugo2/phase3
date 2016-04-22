@@ -1,0 +1,55 @@
+COPY    START
+Error: Missing or illegal operand on START directive. 
+CLOOP   JSUB    RDRECss		READ INPUT RECORD                                 00207D	480000
+Error: Missing or illegal operand on START directive. Error: Illegal operation. 
+EOF     BYTE    C'EO&F'                                                    	454F2646
+THREE   WORD    3                                                          002084	000003
+ZERO    WORD    0                                                          002087	000000
+RETADR  RESW    1                                                          00208A	FF
+LENGTH  RESW    1		LENGTH OF RECORD                                        00208D	FF
+BUFFER  RESB    4096		4096-BYTE BUFFER AREA                                002090	FE
+RDREC   LDX     ZERO		CLEAR LOOP COUNTER                                   003090	042087
+	LDA     ZERO		CLEAR A TO ZERO                                             003093	002087
+RLOOPSS   TD      INPUT		TEST INPUT DEVICE                                 003096	E030B4
+Error: Missing or illegal operand on START directive. Error: Illegal operation. Error: Illegal label. 
+	JEQ     RLOOP		LOOP UNTIL READY                                           003099	300000
+Error: Missing or illegal operand on START directive. Error: Illegal operation. Error: Illegal label. Error: Illegal operation. 
+	RD      INPUT		READ CHARACTER INTO REGISTAR A                             00309C	D830B4
+	COMP    ZERO		TEST FOR END OF RECORD (X'00')                              00309F	282087
+	JEQ     EXIT		EXIT LOOP IF EOF                                            0030A2	3030AE
+	STCH    BUFFER,X	STORE CHARCTER IN BUFFER                                 0030A5	548000
+	TIX     MAXLEN		LOOP UNLESS MAX LENGTH                                    0030A8	2C30B5
+	JLT     OOP	  	  HAS BEEN REACHED                                         0030AB	380000
+Error: Missing or illegal operand on START directive. Error: Illegal operation. Error: Illegal label. Error: Illegal operation. Error: Illegal operation. 
+EXIT    STX     LENGTH		SAVE RECORD LENGTH                                 0030AE	10208D
+	RSUB                    RETURN TO CALLER                                  0030B1	4C0000
+INPUT   BYTE    X'F1'		CODE FOR INPUT DEVICE                               	F1
+MAXLEN	WORD	4096                                                           0030B5	0016534
+WRREC   LDX    ZERO		CLEAR LOOP COUNTER                                    0030B8	042087
+WLOOP   TD     OUTPUT		TEST OUTPUT DEVICE                                  0030BB	E030D0
+	JEQ    WLOOP		LOOP UNTIL READY                                            0030BE	3030BB
+	LDCH   BUFFER,SD	        GET CHARCTER FROM BUFFER                         0030C1	500000
+Error: Missing or illegal operand on START directive. Error: Illegal operation. Error: Illegal label. Error: Illegal operation. Error: Illegal operation. Error: Illegal operation. 
+	WD     OUTPUT		WRITE CHARACTER                                            0030C4	DC30D0
+	TIX    LENGTH		LOOP UNTIL ALL CHARACTERS                                  0030C7	2C208D
+	JLT    WLOOP	  	  HAVE BEEN WRITTEN                                       0030CA	3830BB
+	RSUB                    RETURN TO CALLER                                  0030CD	4C0000
+OUTPUT  BYTE   X'05'		CODE FOR OUTPUT DEVICE                               	05
+	                                                                          	256
+Error: Missing or illegal operand on START directive. Error: Illegal operation. Error: Illegal label. Error: Illegal operation. Error: Illegal operation. Error: Illegal operation. Error: Missing instruction. 
+BUFFER		2090
+CLOOP		207D
+EOF		2080
+EXIT		30AE
+FIRST		207A
+INPUT		30B4
+LENGTH		208D
+MAXLEN		30B5
+OUTPUT		30D0
+RDREC		3090
+RETADR		208A
+RLOOPSS		3096
+THREE		2084
+WLOOP		30BB
+WRREC		30B8
+ZERO		2087
